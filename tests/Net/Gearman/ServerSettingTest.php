@@ -124,6 +124,23 @@ class ServerSettingTest extends \PHPUnit_Framework_TestCase
     /**
      * @param ServerSetting $serverSetting
      * @dataProvider serverSettingImplementationDataProvider
+     */
+    public function testAddServersAsString(ServerSetting $serverSetting)
+    {
+        $servers = 'localhost,localhost:1234,  example.com:4730';
+        $serverSetting->addServers($servers);
+
+        $servers = array(
+            'localhost:4730',
+            'localhost:1234',
+            'example.com:4730'
+        );
+        $this->assertEquals($servers, $serverSetting->getServers());
+    }
+
+    /**
+     * @param ServerSetting $serverSetting
+     * @dataProvider serverSettingImplementationDataProvider
      * @expectedException \InvalidArgumentException
      */
     public function testAddServersThrowsExceptionIfServerAlreadyExists(ServerSetting $serverSetting)

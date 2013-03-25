@@ -106,8 +106,12 @@ class Worker implements ServerSetting
         return array_keys($this->servers);
     }
 
-    public function addServers(array $servers)
+    public function addServers($servers)
     {
+        if (!is_array($servers)) {
+            $servers = explode(',', $servers);
+        }
+
         foreach ($servers as $server) {
             $explodedServer = explode(':', $server);
             $port = isset($explodedServer[1]) ? $explodedServer[1] : null;
@@ -118,22 +122,20 @@ class Worker implements ServerSetting
         return $this;
     }
 
-    public function addServer($host = null , $port = null)
+    public function addServer($host = 'localhost' , $port = null)
     {
-        if (null === $host) {
-            $host = 'localhost';
-        } else {
-            $host = trim($host);
-        }
-
+        $host = trim($host);
         if (empty($host)) {
             throw new \InvalidArgumentException("Invalid host '$host' given");
         }
 
         if (null === $port) {
             $port = $this->getDefaultPort();
-        } elseif (empty($port)) {
-            throw new \InvalidArgumentException("Invalid port '$port' given");
+        } else {
+            $port = (int) $port;
+            if (!$port > 0) {
+                throw new \InvalidArgumentException("Invalid port '$port' given");
+            }
         }
 
         $server = $host . ':' . $port;

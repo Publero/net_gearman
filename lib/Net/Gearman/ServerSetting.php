@@ -14,12 +14,12 @@ interface ServerSetting
      * @throws \InvalidArgumentException
      * @return self
      */
-    public function addServer($host = null , $port = null);
+    public function addServer($host = 'localhost' , $port = null);
 
     /**
-     * @param string[] $servers
+     * @param string|array $servers Servers separated with comma, or array of servers
      * @throws \InvalidArgumentException
      * @return self
      */
-    public function addServers(array $servers);
+    public function addServers($servers);
 }
