@@ -4,7 +4,7 @@ namespace Net\Gearman;
 /**
  * Interface for Danga's Gearman job scheduling system
  *
- * PHP version 5.4.4+
+ * PHP version 5.3.0+
  *
  * LICENSE: This source file is subject to the New BSD license that is
  * available through the world-wide-web at the following URI:
@@ -202,9 +202,11 @@ class Connection
 
         $d = implode("\x00", $data);
 
-        $cmd = "\0REQ" . pack("NN",
-                              self::$commands[$command][0],
-                              self::stringLength($d)) . $d;
+        $cmd = "\0REQ" . pack(
+            "NN",
+            self::$commands[$command][0],
+            self::stringLength($d)
+        ) . $d;
 
         $cmdLength = self::stringLength($cmd);
         $written = 0;

@@ -4,7 +4,7 @@ namespace Net\Gearman;
 /**
  * Interface for Danga's Gearman job scheduling system
  *
- * PHP version 5.4.4+
+ * PHP version 5.3.0+
  *
  * LICENSE: This source file is subject to the New BSD license that is
  * available through the world-wide-web at the following URI:
@@ -36,7 +36,7 @@ namespace Net\Gearman;
  * @version   Release: @package_version@
  * @link      http://www.danga.com/gearman/
  */
-class Client
+class Client implements ServerSetting
 {
     /**
      * Our randomly selected connection
@@ -46,9 +46,7 @@ class Client
     protected $conn = array();
 
     /**
-     * A list of Gearman servers
-     *
-     * @var array $servers A list of potential Gearman servers
+     * @var string[] List of gearman servers
      */
     protected $servers = array();
 
@@ -60,41 +58,69 @@ class Client
     protected $timeout = 1000;
 
     /**
-     * Constructor
-     *
      * @param array   $servers An array of servers or a single server
      * @param integer $timeout Timeout in microseconds
      *
-     * @return void
      * @throws Net\Gearman\Exception
      * @see Net\Gearman\Connection
      */
-    public function __construct($servers = null, $timeout = 1000)
+    public function __construct($timeout = 1000)
     {
-        if (is_null($servers)){
-            $servers = array("localhost");
-        } elseif (!is_array($servers) && strlen($servers)) {
-            $servers = array($servers);
-        } elseif (is_array($servers) && !count($servers)) {
-            throw new Exception('Invalid servers specified');
-        }
-
-        $this->servers = $servers;
-        foreach ($this->servers as $key => $server) {
-            $server = trim($server);
-            if(empty($server)){
-                throw new Exception('Invalid servers specified');
-            }
-            $conn = Connection::connect($server, $timeout);
-            if (!Connection::isConnected($conn)) {
-                unset($this->servers[$key]);
-                continue;
-            }
-
-            $this->conn[] = $conn;
-        }
-
         $this->timeout = $timeout;
+    }
+
+    public function getServers()
+    {
+        return array_keys($this->servers);
+    }
+
+    public function addServers(array $servers)
+    {
+        foreach ($servers as $server) {
+            $explodedServer = explode(':', $server);
+            $port = isset($explodedServer[1]) ? $explodedServer[1] : null;
+
+            $this->addServer($explodedServer[0], $port);
+        }
+
+        return $this;
+    }
+
+    public function addServer($host = null , $port = null)
+    {
+        if (null === $host) {
+            $host = 'localhost';
+        } else {
+            $host = trim($host);
+        }
+
+        if (empty($host)) {
+            throw new \InvalidArgumentException("Invalid host '$host' given");
+        }
+
+        if (null === $port) {
+            $port = $this->getDefaultPort();
+        } elseif (empty($port)) {
+            throw new \InvalidArgumentException("Invalid port '$port' given");
+        }
+
+        $server = $host . ':' . $port;
+
+        if (isset($this->servers[$server])) {
+            throw new \InvalidArgumentException("Server '$server' is already registered");
+        }
+
+        $this->servers[$server] = true;
+
+        return $this;
+    }
+
+    /**
+     * @return int
+     */
+    protected function getDefaultPort()
+    {
+        return 4730;
     }
 
     /**
@@ -111,32 +137,16 @@ class Client
      * Fire off a background task with the given arguments
      *
      * @param string $func Name of job to run
-     * @param array  $args First key should be args to send
-     *
-     * @return void
-     * @see Net\Gearman\Task, Net\Gearman\Set
+     * @param array  $send First key should be args to send
+     * @param string $unique
      */
-    public function __call($func, array $args = array())
+    public function call($func, $send, $unique = null)
     {
-        $send = "";
-        if (isset($args[0]) && !empty($args[0])) {
-            $send = $args[0];
+        if (null === $unique) {
+            $unique = getmypid() . '_' . uniqid();
         }
 
-        return $this->call($func, $send);
-    }
-
-    /**
-     * Fire off a background task with the given arguments
-     *
-     * @param string $func Name of job to run
-     * @param array  $args First key should be args to send
-     * @param func
-     * @param send
-     */
-    public function call($func, $send)
-    {
-        $task       = new Task($func, $send);
+        $task       = new Task($func, $send, $unique);
         $task->type = Task::JOB_BACKGROUND;
 
         $set = new Set();
@@ -144,7 +154,6 @@ class Client
         $this->runSet($set);
         return $task->handle;
     }
-
 
     /**
      * Submit a task to Gearman
@@ -177,13 +186,7 @@ class Client
             break;
         }
 
-        // if we don't have a scalar
-        // json encode the data
-        if(!is_scalar($task->arg)){
-            $arg = json_encode($task->arg);
-        } else {
-            $arg = $task->arg;
-        }
+        $arg = $task->arg;
 
         $params = array(
             'func' => $task->func,
@@ -212,6 +215,16 @@ class Client
      */
     public function runSet(Set $set, $timeout = null)
     {
+        foreach ($this->getServers() as $server) {
+            $conn = Connection::connect($server, $timeout);
+            if (!Connection::isConnected($conn)) {
+                unset($this->servers[$server]);
+                continue;
+            }
+
+            $this->conn[] = $conn;
+        }
+
         $totalTasks = $set->tasksCount;
         $taskKeys   = array_keys($set->tasks);
         $t          = 0;
@@ -223,24 +236,16 @@ class Client
         }
 
         while (!$set->finished()) {
-
             if ($timeout !== null) {
-
                 if (empty($start)) {
-
                     $start = microtime(true);
-
                 } else {
-
                     $now = microtime(true);
-
                     if ($now - $start >= $timeout) {
                         break;
                     }
                 }
-
             }
-
 
             if ($t < $totalTasks) {
                 $k = $taskKeys[$t];
@@ -289,7 +294,7 @@ class Client
         switch ($resp['function']) {
         case 'work_complete':
             $tasks->tasksCount--;
-            $task->complete(json_decode($resp['data']['result'], true));
+            $task->complete($resp['data']['result']);
             break;
         case 'work_status':
             $n = (int)$resp['data']['numerator'];

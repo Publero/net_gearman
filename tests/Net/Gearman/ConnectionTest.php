@@ -19,9 +19,12 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase
      */
     public function testDefaultConnect()
     {
-        return $this->markTestSkipped('Skipped. You can try this test on your machine with gearman running.');
+        try {
+            $connection = Connection::connect();
+        } catch (\Net\Gearman\Exception $exception) {
+            return $this->markTestSkipped('Skipped. You can try this test on your machine with gearman running.');
+        }
 
-        $connection = Connection::connect();
         $this->assertInternalType('resource', $connection);
         $this->assertEquals('socket', strtolower(get_resource_type($connection)));
 
@@ -32,9 +35,12 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase
 
     public function testSend()
     {
-        return $this->markTestSkipped('Skipped. You can try this test on your machine with gearman running.');
+        try {
+            $connection = Connection::connect();
+        } catch (\Net\Gearman\Exception $exception) {
+            return $this->markTestSkipped('Skipped. You can try this test on your machine with gearman running.');
+        }
 
-        $connection = Connection::connect();
         Connection::send($connection, 'echo_req', array('text' => 'foobar'));
 
         do {

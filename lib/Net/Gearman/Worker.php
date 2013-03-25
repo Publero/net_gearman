@@ -4,7 +4,7 @@ namespace Net\Gearman;
 /**
  * Interface for Danga's Gearman job scheduling system
  *
- * PHP version 5.4.4+
+ * PHP version 5.3.0+
  *
  * LICENSE: This source file is subject to the New BSD license that is
  * available through the world-wide-web at the following URI:
@@ -28,30 +28,6 @@ namespace Net\Gearman;
  * Run an instance of a worker to listen for jobs. It then manages the running
  * of jobs, etc.
  *
- * <code>
- * <?php
- *
- * $servers = array(
- *     '127.0.0.1:7003',
- *     '127.0.0.1:7004'
- * );
- *
- * $abilities = array('HelloWorld', 'Foo', 'Bar');
- *
- * try {
- *     $worker = new Net_Gearman_Worker($servers);
- *     foreach ($abilities as $ability) {
- *         $worker->addAbility('HelloWorld');
- *     }
- *     $worker->beginWork();
- * } catch (Net_Gearman_Exception $e) {
- *     echo $e->getMessage() . "\n";
- *     exit;
- * }
- *
- * ?>
- * </code>
- *
  * @category  Net
  * @package   Net_Gearman
  * @author    Joe Stump <joe@joestump.net>
@@ -59,66 +35,48 @@ namespace Net\Gearman;
  * @license   http://www.opensource.org/licenses/bsd-license.php New BSD License
  * @version   Release: @package_version@
  * @link      http://www.danga.com/gearman/
- * @see       Net_Gearman_Job, Net_Gearman_Connection
+ * @see       Net\Gearman\Job, Net\Gearman\Connection
  */
-class Worker
+class Worker implements ServerSetting
 {
     /**
-     * Pool of connections to Gearman servers
-     *
-     * @var array $conn
+     * @var string $id Unique id for this worker
      */
-    protected $conn = array();
+    protected $id;
 
     /**
-     * Pool of retry connections
-     *
-     * @var array $conn
+     * @var array $connection Pool of connections to Gearman servers
+     */
+    protected $connection = array();
+
+    /**
+     * @var array $conn Pool of retry connections
      */
     protected $retryConn = array();
 
     /**
-     * Pool of worker abilities
-     *
-     * @var array $conn
+     * @var array[] $functions
      */
-    protected $abilities = array();
+    protected $functions = array();
 
     /**
-     * Parameters for job contructors, indexed by ability name
-     *
-     * @var array $initParams
+     * @var string[] List of gearman servers
      */
-    protected $initParams = array();
-
-    /**
-     * Job Factory
-     *
-     * @var callback
-     */
-    protected $jobFactory = array('Net_Gearman_Job', 'factory');
+    protected $servers = array();
 
     /**
      * Callbacks registered for this worker
      *
      * @var array $callback
-     * @see Net_Gearman_Worker::JOB_START
-     * @see Net_Gearman_Worker::JOB_COMPLETE
-     * @see Net_Gearman_Worker::JOB_FAIL
+     * @see Net\Gearman\Worker::JOB_START
+     * @see Net\Gearman\Worker::JOB_COMPLETE
+     * @see Net\Gearman\Worker::JOB_FAIL
      */
     protected $callback = array(
         self::JOB_START     => array(),
         self::JOB_COMPLETE  => array(),
         self::JOB_FAIL      => array()
     );
-
-    /**
-     * Unique id for this worker
-     *
-     * @var string $id
-     */
-    protected $id = "";
-
 
     /**
      * Callback types
@@ -132,120 +90,135 @@ class Worker
     const JOB_FAIL     = 3;
 
     /**
-     * Constructor
-     *
-     * @param array $servers List of servers to connect to
-     * @param string $id     Optional unique id for this worker
-     *
-     * @return void
-     * @throws Net_Gearman_Exception
-     * @see Net_Gearman_Connection
+     * @param string $id Optional unique id for this worker
      */
-    public function __construct($servers = null, $id = "")
+    public function __construct($id = null)
     {
-        if (is_null($servers)){
-            $servers = array("localhost");
-        } elseif (!is_array($servers) && strlen($servers)) {
-            $servers = array($servers);
-        } elseif (is_array($servers) && !count($servers)) {
-            throw new Exception('Invalid servers specified');
-        }
-
-        if(empty($id)){
+        if(null === $id){
             $id = "pid_".getmypid()."_".uniqid();
         }
 
         $this->id = $id;
+    }
 
-        foreach ($servers as $s) {
-            try {
-                $conn = Connection::connect($s);
+    public function getServers()
+    {
+        return array_keys($this->servers);
+    }
 
-                Connection::send($conn, "set_client_id", array("client_id" => $this->id));
+    public function addServers(array $servers)
+    {
+        foreach ($servers as $server) {
+            $explodedServer = explode(':', $server);
+            $port = isset($explodedServer[1]) ? $explodedServer[1] : null;
 
-                $this->conn[$s] = $conn;
-
-            } catch (\Exception $e) {
-
-                $this->retryConn[$s] = time();
-            }
+            $this->addServer($explodedServer[0], $port);
         }
 
-        if (empty($this->conn)) {
-            throw new Exception(
-                "Couldn't connect to any available servers"
-            );
+        return $this;
+    }
+
+    public function addServer($host = null , $port = null)
+    {
+        if (null === $host) {
+            $host = 'localhost';
+        } else {
+            $host = trim($host);
         }
+
+        if (empty($host)) {
+            throw new \InvalidArgumentException("Invalid host '$host' given");
+        }
+
+        if (null === $port) {
+            $port = $this->getDefaultPort();
+        } elseif (empty($port)) {
+            throw new \InvalidArgumentException("Invalid port '$port' given");
+        }
+
+        $server = $host . ':' . $port;
+
+        if (isset($this->servers[$server])) {
+            throw new \InvalidArgumentException("Server '$server' is already registered");
+        }
+
+        $this->servers[$server] = true;
+
+        return $this;
     }
 
     /**
-     * Set Job Factory
-     *
-     * Callback method
-     *   callback ( $name, $socket, $handle, $initParams = array() )
-     *
-     *   param $name - function name
-     *   param $socket - server connection
-     *   param $handle - job handle
-     *   param $initParams - Parameters for job constructor as per addAbility
-     *
-     * @param callable
-     * @return void
-     * @throws
+     * @return int
      */
-    public function setJobFactory($callable)
+    protected function getDefaultPort()
     {
-        if (!is_callable($callable)) {
-            throw new \InvalidArgumentException('Callback is not callable');
-        }
-        $this->jobFactory = $callable;
+        return 4730;
     }
 
     /**
-     * Announce an ability to the job server
-     *
-     * @param string  $ability Name of functcion/ability
-     * @param integer $timeout How long to give this job
-     * @param array $initParams Parameters for job constructor
-     *
-     * @return void
-     * @see Net_Gearman_Connection::send()
+     * @return string[]
      */
-    public function addAbility($ability, $timeout = null, $initParams=array())
+    public function getFunctions()
     {
-        $call   = 'can_do';
-        $params = array('func' => $ability);
-        if (is_int($timeout) && $timeout > 0) {
-            $params['timeout'] = $timeout;
-            $call              = 'can_do_timeout';
-        }
-
-        $this->initParams[$ability] = $initParams;
-
-        $this->abilities[$ability] = $timeout;
-
-        foreach ($this->conn as $conn) {
-            Connection::send($conn, $call, $params);
-        }
+        return $this->functions;
     }
 
     /**
-     * Begin working
-     *
-     * This starts the worker on its journey of actually working. The first
-     * argument is a PHP callback to a function that can be used to monitor
-     * the worker. If no callback is provided then the worker works until it
-     * is killed. The monitor is passed two arguments; whether or not the
-     * worker is idle and when the last job was ran.
-     *
-     * @param callback $monitor Function to monitor work
-     *
-     * @return void
-     * @see Net_Gearman_Connection::send(), Net_Gearman_Connection::connect()
-     * @see Net_Gearman_Worker::doWork(), Net_Gearman_Worker::addAbility()
+     * @param string $functionName
+     * @param callback $callback
+     * @param int $timeout
+     * @throws \InvalidArgumentException
+     * @return self
      */
-    public function beginWork($monitor = null)
+    public function addFunction($functionName, $callback, $timeout = null)
     {
+        if (isset($this->functions[$functionName])) {
+            throw new \InvalidArgumentException("Function $functionName is already registered");
+        }
+
+        $this->functions[$functionName] = array('callback' => $callback);
+        if (null !== $timeout) {
+            $this->functions[$functionName]['timeout'] = $timeout;
+        }
+
+        return $this;
+    }
+
+    /**
+     * @param string
+     * @throws \InvalidArgumentException
+     * @return self
+     */
+    public function unregister($functionName)
+    {
+        if (!isset($this->functions[$functionName])) {
+            throw new \InvalidArgumentException("Function $functionName is not registered");
+        }
+
+        unset($this->functions[$functionName]);
+
+        return $this;
+    }
+
+    /**
+     * @return self
+     */
+    public function unregisterAll()
+    {
+        $this->functions = array();
+
+        return $this;
+    }
+
+    /**
+     * @throws Exception
+     * @return bool
+     */
+    public function work($monitor = null)
+    {
+        $this->connectToAllServers();
+        $this->registerFunctionsToOpenedConnections();
+
         if (!is_callable($monitor)) {
             $monitor = array($this, 'stopWork');
         }
@@ -260,12 +233,13 @@ class Worker
             $sleep = true;
             $currentTime = time();
 
-            foreach ($this->conn as $server => $socket) {
+            foreach ($this->connection as $server => $socket) {
                 $worked = false;
                 try {
                     $worked = $this->doWork($socket);
                 } catch (\Exception $e) {
-                    unset($this->conn[$server]);
+                    unset($this->connection[$server]);
+                    file_put_contents('/home/hlavac/result.txt', $e->getMessage() . "\n", FILE_APPEND);
                     $this->retryConn[$server] = $currentTime;
                 }
                 if ($worked) {
@@ -275,12 +249,12 @@ class Worker
             }
 
             $idle = false;
-            if ($sleep && count($this->conn)) {
-                foreach ($this->conn as $socket) {
+            if ($sleep && count($this->connection)) {
+                foreach ($this->connection as $socket) {
                     Connection::send($socket, 'pre_sleep');
                 }
 
-                $read = $this->conn;
+                $read = $this->connection;
                 socket_select($read, $write, $except, 60);
                 $idle = (count($read) == 0);
             }
@@ -290,7 +264,7 @@ class Worker
                 if (($lastTry + $retryTime) < $currentTime) {
                     try {
                         $conn = Connection::connect($s);
-                        $this->conn[$s]         = $conn;
+                        $this->connection[$s]   = $conn;
                         $retryChange            = true;
                         unset($this->retryConn[$s]);
                         Connection::send($conn, "set_client_id", array("client_id" => $this->id));
@@ -300,22 +274,47 @@ class Worker
                 }
             }
 
-            if (count($this->conn) == 0) {
+            if (count($this->connection) == 0) {
                 // sleep to avoid wasted cpu cycles if no connections to block on using socket_select
                 sleep(1);
             }
 
             if ($retryChange === true) {
-                // broadcast all abilities to all servers
-                foreach ($this->abilities as $ability => $timeout) {
-                    $this->addAbility(
-                        $ability, $timeout, $this->initParams[$ability]
-                    );
-                }
+                $this->registerFunctionsToOpenedConnections();
             }
 
             if (call_user_func($monitor, $idle, $lastJob) == true) {
                 $working = false;
+            }
+        }
+
+    }
+
+    private function connectToAllServers()
+    {
+        foreach ($this->getServers() as $server) {
+            try {
+                $connection = Connection::connect($server);
+                Connection::send($connection, "set_client_id", array("client_id" => $this->id));
+                $this->connection[$server] = $connection;
+            } catch (\Exception $exception) {
+                $this->retryConn[$server] = time();
+            }
+        }
+
+        if (empty($this->connection)) {
+            throw new Exception("Couldn't connect to any available servers");
+        }
+    }
+
+    public function registerFunctionsToOpenedConnections()
+    {
+        foreach (array_keys($this->functions) as $gearmanFunction) {
+            $params = array('func' => $gearmanFunction);
+            $call = isset($params['timeout']) ? 'can_do_timeout' : 'can_do';
+
+            foreach ($this->connection as $connection) {
+                Connection::send($connection, $call, $params);
             }
         }
     }
@@ -347,7 +346,7 @@ class Worker
         }
 
         if ($resp['function'] != 'job_assign') {
-            throw new Net_Gearman_Exception('Holy Cow! What are you doing?!');
+            throw new Exception('Internal error - Job was not assigned after it was grabbed by this worker');
         }
 
         $name   = $resp['data']['func'];
@@ -362,21 +361,17 @@ class Worker
             }
         }
 
-        $job = call_user_func(
-            $this->jobFactory, $name, $socket, $handle, $this->initParams[$name]
-        );
         try {
-            $this->start($handle, $name, $arg);
-            $res = $job->run($arg);
-            if (!is_array($res)) {
-                $res = array('result' => $res);
-            }
+            $this->callStartCallbacks($handle, $name, $arg);
 
-            $job->complete($res);
-            $this->complete($handle, $name, $res);
+            $functionCallback = $this->functions[$name]['callback'];
+            $result = call_user_func($functionCallback, $arg);
+
+            $this->jobComplete($socket, $handle, $result);
+            $this->callCompleteCallbacks($handle, $name, $result);
         } catch (JobException $e) {
-            $job->fail();
-            $this->fail($handle, $name, $e);
+            $this->jobFail($socket, $handle);
+            $this->callFailCallbacks($handle, $name, $e);
         }
 
         // Force the job's destructor to run
@@ -386,14 +381,64 @@ class Worker
     }
 
     /**
-     * Attach a callback
+     * Update Gearman with your job's status
      *
-     * @param callback $callback A valid PHP callback
-     * @param integer  $type     Type of callback
+     * @param integer $numerator   The numerator (e.g. 1)
+     * @param integer $denominator The denominator  (e.g. 100)
      *
-     * @return void
-     * @throws Net_Gearman_Exception When an invalid callback is specified.
-     * @throws Net_Gearman_Exception When an invalid type is specified.
+     * @see Net\Gearman\Connection::send()
+     */
+    public function jobStatus($numerator, $denominator)
+    {
+        Connection::send($this->conn, 'work_status', array(
+            'handle' => $this->handle,
+            'numerator' => $numerator,
+            'denominator' => $denominator
+        ));
+    }
+
+    /**
+     * Mark your job as complete with its status
+     *
+     * @param resource $socket
+     * @param string $handle
+     * @param array $result Result of your job
+     *
+     * @see Net\Gearman\Connection::send()
+     */
+    private function jobComplete($socket, $handle, $result)
+    {
+        Connection::send($socket, 'work_complete', array(
+            'handle' => $handle,
+            'result' => $result
+        ));
+    }
+
+    /**
+     * Mark your job as failing
+     *
+     * If your job fails for some reason (e.g. a query fails) you need to run
+     * this function and exit from your run() method. This will tell Gearman
+     * (and the client by proxy) that the job has failed.
+     *
+     * @param resource $socket
+     * @param string $handle
+     *
+     * @see Net\Gearman\Connection::send()
+     */
+    private function jobFail($socket, $handle)
+    {
+        Connection::send($socket, 'work_fail', array(
+            'handle' => $handle
+        ));
+    }
+
+    /**
+     * @param callback $callback
+     * @param int      $type
+     *
+     * @throws Net\Gearman\Exception When an invalid callback is specified.
+     * @throws Net\Gearman\Exception When an invalid type is specified.
      */
     public function attachCallback($callback, $type = self::JOB_COMPLETE)
     {
@@ -407,86 +452,51 @@ class Worker
     }
 
     /**
-     * Run the job start callbacks
-     *
      * @param string $handle The job's Gearman handle
      * @param string $job    The name of the job
      * @param mixed  $args   The job's argument list
-     *
-     * @return void
      */
-    protected function start($handle, $job, $args)
+    protected function callStartCallbacks($handle, $job, $args)
     {
-        if (count($this->callback[self::JOB_START]) == 0) {
-            return; // No callbacks to run
-        }
-
         foreach ($this->callback[self::JOB_START] as $callback) {
             call_user_func($callback, $handle, $job, $args);
         }
     }
 
     /**
-     * Run the complete callbacks
-     *
      * @param string $handle The job's Gearman handle
      * @param string $job    The name of the job
-     * @param array  $result The job's returned result
-     *
-     * @return void
+     * @param string $result The job's returned result
      */
-    protected function complete($handle, $job, array $result)
+    protected function callCompleteCallbacks($handle, $job, $result)
     {
-        if (count($this->callback[self::JOB_COMPLETE]) == 0) {
-            return; // No callbacks to run
-        }
-
         foreach ($this->callback[self::JOB_COMPLETE] as $callback) {
             call_user_func($callback, $handle, $job, $result);
         }
     }
 
     /**
-     * Run the fail callbacks
-     *
      * @param string $handle The job's Gearman handle
      * @param string $job    The name of the job
      * @param object $error  The exception thrown
-     *
-     * @return void
      */
-    protected function fail($handle, $job, PEAR_Exception $error)
+    protected function callFailCallbacks($handle, $job, PEAR_Exception $error)
     {
-        if (count($this->callback[self::JOB_FAIL]) == 0) {
-            return; // No callbacks to run
-        }
-
         foreach ($this->callback[self::JOB_FAIL] as $callback) {
             call_user_func($callback, $handle, $job, $error);
         }
     }
 
-    /**
-     * Stop working
-     *
-     * @return void
-     */
-    public function endWork()
-    {
-        foreach ($this->conn as $conn) {
-            Connection::close($conn);
-        }
-    }
-
-    /**
-     * Destructor
-     *
-     * @return void
-     * @see Net_Gearman_Worker::stop()
-     */
     public function __destruct()
     {
         $this->endWork();
+    }
+
+    public function endWork()
+    {
+        foreach ($this->connection as $conn) {
+            Connection::close($conn);
+        }
     }
 
     /**

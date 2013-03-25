@@ -28,32 +28,17 @@ Examples
 ``` php
 <?php
 
-$client = new Net\Gearman\Client('localhost:4730');
-$client->someBackgroundJob([
-    'userid' => 5555,
-    'action' => 'new-comment'
-]);
-```
+$client = new \Net\Gearman\Client();
+$client->addServer();
 
-### Job
-
-``` php
-<?php
-
-class Net_Gearman_Job_someBackgroundJob extends Net\Gearman\Job\CommonJob
-{
-    public function run($args)
-    {
-        if (!isset($args['userid']) || !isset($args['action'])) {
-            throw new Net\Gearman\Job\JobException('Invalid/Missing arguments');
-        }
-
-        // Insert a record or something based on the $args
-
-        return []; // Results are returned to Gearman, except for 
-                   // background jobs like this one.
-    }
-}
+$callback = function ($func, $handle, $result) {
+    echo $result;
+};
+$set = new Set();
+$task = new Task('replace', 'PHP is best programming language!', uniqid());
+$task->attachCallback($callback, Task::TASK_COMPLETE);
+$set->addTask($task);
+$client->runSet($set);
 ```
 
 ### Worker
@@ -61,7 +46,13 @@ class Net_Gearman_Job_someBackgroundJob extends Net\Gearman\Job\CommonJob
 ``` php
 <?php
 
-$worker = new Net\Gearman\Worker('localhost:4730');
-$worker->addAbility('someBackgroundJob');
-$worker->beginWork();
+$function = function($payload) {
+    return str_replace('java', 'php', $payload);
+};
+
+$worker = new \Net\Gearman\Worker();
+$worker->addServer();
+$worker->addFunction('replace', $function);
+
+$worker->work();
 ```

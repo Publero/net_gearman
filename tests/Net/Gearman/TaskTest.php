@@ -96,7 +96,7 @@ class TaskTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(null, $task->complete('foo'));
 
         // Attach a callback for real
-        $task->attachCallback([$this, 'Net_Gearman_TaskTest_testCallBack']);
+        $task->attachCallback(array($this, 'Net_Gearman_TaskTest_testCallBack'));
 
         // build result and call complete again
         $json = json_decode('{"foo":"bar"}');

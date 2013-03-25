@@ -6,7 +6,7 @@ use Net\Gearman\Exception;
 /**
  * Interface for Danga's Gearman job scheduling system
  *
- * PHP version 5.4.4+
+ * PHP version 5.3.0+
  *
  * LICENSE: This source file is subject to the New BSD license that is
  * available through the world-wide-web at the following URI:
