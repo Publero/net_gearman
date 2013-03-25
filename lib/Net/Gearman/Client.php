@@ -51,9 +51,7 @@ class Client implements ServerSetting
     protected $servers = array();
 
     /**
-     * The timeout for Gearman connections
-     *
-     * @var integer $timeout
+     * @var integer $timeout The timeout for Gearman connections
      */
     protected $timeout = 1000;
 
@@ -134,25 +132,133 @@ class Client implements ServerSetting
     }
 
     /**
-     * Fire off a background task with the given arguments
+     * Runs a single task and returns a string representation of the result.
      *
-     * @param string $func Name of job to run
-     * @param array  $send First key should be args to send
+     * @param string $functionName
+     * @param string $workload
      * @param string $unique
+     * @return string
      */
-    public function call($func, $send, $unique = null)
+    public function doNormal($functionName, $workload, $unique = null)
+    {
+        return $this->runSingleTaskSet($this->createSet($functionName, $workload, $unique));
+    }
+
+    /**
+     * Runs a single high priority task and returns a string representation of the result.
+     *
+     * @param string $functionName
+     * @param string $workload
+     * @param string $unique
+     * @return string
+     */
+    public function doHigh($functionName, $workload, $unique = null)
+    {
+        return $this->runSingleTaskSet($this->createSet($functionName, $workload, $unique, Task::JOB_HIGH));
+    }
+
+    /**
+     * Runs a single low priority task and returns a string representation of the result.
+     *
+     * @param string $functionName
+     * @param string $workload
+     * @param string $unique
+     * @return string
+     */
+    public function doLow($functionName, $workload, $unique = null)
+    {
+        return $this->runSingleTaskSet($this->createSet($functionName, $workload, $unique, Task::JOB_LOW));
+    }
+
+    /**
+     * @param Set $set
+     * @return string
+     */
+    protected function runSingleTaskSet(Set $set)
+    {
+        $this->runSet($set);
+        $task = current($set->tasks);
+
+        return $task->result;
+    }
+
+    /**
+     * Runs a task in the background, returning a job handle which can be used
+     * to get the status of the running task.
+     *
+     * @param string $functionName
+     * @param string $workload
+     * @param string $unique
+     * @return Task
+     */
+    public function doBackground($functionName, $workload, $unique = null)
+    {
+        $set = $this->createSet($functionName, $workload, $unique, Task::JOB_BACKGROUND);
+        $this->runSet($set);
+
+        return current($set->tasks);
+    }
+
+    /**
+     * Runs a task in the background, returning a job handle which can be used
+     * to get the status of the running task.
+     *
+     * @param string $functionName
+     * @param string $workload
+     * @param string $unique
+     * @return Task
+     */
+    public function doHighBackground($functionName, $workload, $unique = null)
+    {
+        $set = $this->createSet($functionName, $workload, $unique, Task::JOB_HIGH_BACKGROUND);
+        $this->runSet($set);
+
+        return current($set->tasks);
+    }
+
+    /**
+     * Runs a task in the background, returning a job handle which can be used
+     * to get the status of the running task.
+     *
+     * @param string $functionName
+     * @param string $workload
+     * @param string $unique
+     * @return Task
+     */
+    public function doLowBackground($functionName, $workload, $unique = null)
+    {
+        $set = $this->createSet($functionName, $workload, $unique, Task::JOB_LOW_BACKGROUND);
+        $this->runSet($set);
+
+        return current($set->tasks);
+    }
+
+    /**
+     * @param string $functionName
+     * @param string $workload
+     * @param string $unique
+     * @return Set
+     */
+    private function createSet($functionName, $workload, $unique = null, $type = Task::JOB_NORMAL)
     {
         if (null === $unique) {
-            $unique = getmypid() . '_' . uniqid();
+            $unique = $this->generateUniqueId();
         }
 
-        $task       = new Task($func, $send, $unique);
-        $task->type = Task::JOB_BACKGROUND;
-
+        $task = new Task($functionName, $workload, $unique);
+        $task->type = $type;
         $set = new Set();
         $set->addTask($task);
-        $this->runSet($set);
-        return $task->handle;
+
+        return $set;
+    }
+
+    /**
+     * @return string
+     */
+    protected function generateUniqueId()
+    {
+        return getmypid() . '_' . uniqid();
     }
 
     /**

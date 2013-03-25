@@ -93,19 +93,30 @@ class WorkerTest extends \PHPUnit_Framework_TestCase
         $this->assertCount(0, $this->worker->getFunctions());
     }
 
-    /*public function testWorker()
+    public function testWorker()
     {
+        return $this->markTestSkipped('Skipped. You can try this test on your machine with gearman running.');
+
         $function = function($payload) {
             $result = str_replace('java', 'php', $payload);
-            file_put_contents('/home/hlavac/result.txt', $result . "\n", FILE_APPEND);
 
             return str_replace('java', 'php', $payload);
+        };
+
+        $function2 = function($payload) {
+            while (false !== strpos($payload, 'java')) {
+                $payload = preg_replace('/java/', 'php', $payload, 1);
+                sleep(1);
+            }
+
+            return $payload;
         };
 
         $worker = new Worker();
         $worker->addServer();
         $worker->addFunction('replace', $function);
+        $worker->addFunction('long_task', $function2);
 
         $worker->work();
-    }*/
+    }
 }

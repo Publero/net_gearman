@@ -77,7 +77,7 @@ class Set implements \IteratorAggregate, \Countable
     /**
      * Tasks to run
      *
-     * @var array $tasks
+     * @var Task[] $tasks
      */
     public $tasks = array();
 

@@ -31,14 +31,8 @@ Examples
 $client = new \Net\Gearman\Client();
 $client->addServer();
 
-$callback = function ($func, $handle, $result) {
-    echo $result;
-};
-$set = new Set();
-$task = new Task('replace', 'PHP is best programming language!', uniqid());
-$task->attachCallback($callback, Task::TASK_COMPLETE);
-$set->addTask($task);
-$client->runSet($set);
+$result = $client->doNormal('replace', 'PHP is best programming language!');
+$client->doBackground('long_task', 'PHP rules... PHP rules...');
 ```
 
 ### Worker
@@ -56,3 +50,28 @@ $worker->addFunction('replace', $function);
 
 $worker->work();
 ```
+
+Versioning
+----------
+
+This library uses [semantic versioning](http://semver.org/).
+
+License
+-------
+
+This library is under the new BSD license. See the complete license:
+
+    [LICENSE](index.md)
+
+About
+-----
+
+I've started working on this because you can't compile PECL gearman extension on windows where i need to use this code.
+Goal of this project is to make copy of the PECL gearman extension and allow PHP developers to use them in same way.
+
+Bugs and requests
+-----------------
+
+Feel free to report bugs, request a feature or make a pull request. If you want something new in a bundle we would like to know about it.
+Make sure that you've checked already opened issues as your bug or feature request might already be in issue list.
+
