@@ -236,18 +236,36 @@ class Client implements ServerSetting
     }
 
     /**
+     * Schedule a background task, returning a job handle which can be used
+     * to get the status of the running task.
+     *
+     * @param string $functionName
+     * @param string $workload
+     * @param int $epoch
+     * @param string $unique
+     * @return Task
+     */
+    public function doEpoch($functionName, $workload, $epoch, $unique = null)
+    {
+        $set = $this->createSet($functionName, $workload, $unique, Task::JOB_EPOCH, $epoch);
+        $this->runSet($set);
+
+        return current($set->tasks);
+    }
+
+    /**
      * @param string $functionName
      * @param string $workload
      * @param string $unique
      * @return Set
      */
-    private function createSet($functionName, $workload, $unique = null, $type = Task::JOB_NORMAL)
+    private function createSet($functionName, $workload, $unique = null, $type = Task::JOB_NORMAL, $epoch = 0)
     {
         if (null === $unique) {
             $unique = $this->generateUniqueId();
         }
 
-        $task = new Task($functionName, $workload, $unique);
+        $task = new Task($functionName, $workload, $unique, $type, $epoch);
         $task->type = $type;
         $set = new Set();
         $set->addTask($task);
@@ -286,6 +304,9 @@ class Client implements ServerSetting
         case Task::JOB_BACKGROUND:
             $type = 'submit_job_bg';
             break;
+            case Task::JOB_EPOCH:
+            $type = 'submit_job_epoch';
+            break;
         case Task::JOB_HIGH:
             $type = 'submit_job_high';
             break;
@@ -301,6 +322,10 @@ class Client implements ServerSetting
             'uniq' => $task->uniq,
             'arg'  => $arg
         );
+
+        if ($task->type == Task::JOB_EPOCH) {
+            $params['epoch'] = $task->epoch;
+        }
 
         $s = $this->getConnection();
         Connection::send($s, $type, $params);
@@ -360,7 +385,8 @@ class Client implements ServerSetting
                 $this->submitTask($set->tasks[$k]);
                 if ($set->tasks[$k]->type == Task::JOB_BACKGROUND ||
                     $set->tasks[$k]->type == Task::JOB_HIGH_BACKGROUND ||
-                    $set->tasks[$k]->type == Task::JOB_LOW_BACKGROUND) {
+                    $set->tasks[$k]->type == Task::JOB_LOW_BACKGROUND ||
+                    $set->tasks[$k]->type == Task::JOB_EPOCH) {
 
                     $set->tasks[$k]->finished = true;
                     $set->tasksCount--;

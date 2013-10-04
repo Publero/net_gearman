@@ -60,6 +60,7 @@ class Task
      * @var integer $type
      * @see \Net\Gearman\Task::JOB_NORMAL
      * @see \Net\Gearman\Task::JOB_BACKGROUND
+     * @see \Net\Gearman\Task::JOB_EPOCH
      * @see \Net\Gearman\Task::JOB_HIGH
      * @see \Net\Gearman\Task::JOB_HIGH_BACKGROUND
      * @see \Net\Gearman\Task::JOB_LOW
@@ -107,6 +108,16 @@ class Task
      * @var object $result
      */
     public $result = '';
+
+    /**
+     * Unix timestamp
+     *
+     * This allows you to schedule a background job to run at
+     * a specific moment in time
+     *
+     * @var int $epoch
+     */
+    public $epoch = 0;
 
     /**
      * Callbacks registered for each state
@@ -173,6 +184,16 @@ class Task
     const JOB_LOW_BACKGROUND = 6;
 
     /**
+     * Scheduled background job
+     *
+     * Background jobs in Gearman are "fire and forget". You can check a job's
+     * status periodically, but you can't get a result back from it.
+     *
+     * @var integer JOB_EPOCH
+     */
+    const JOB_EPOCH = 7;
+
+    /**
      * Callback of type complete
      *
      * The callback provided should be ran when the task has been completed. It
@@ -218,7 +239,7 @@ class Task
      * @throws \Net\Gearman\Exception
      */
     public function __construct($func, $arg, $uniq = null,
-                                $type = self::JOB_NORMAL)
+                                $type = self::JOB_NORMAL, $epoch = 0)
     {
         $this->func = $func;
         $this->arg  = $arg;
@@ -230,7 +251,12 @@ class Task
         }
 
         $type = (int) $type;
-        if ($type > 6) {
+
+        if ($type == self::JOB_EPOCH) {
+            $this->epoch = $epoch;
+        }
+
+        if ($type > 7) {
             throw new Exception(
                 "Unknown job type: {$type}. Please see \Net\Gearman\Task::JOB_* constants."
             );

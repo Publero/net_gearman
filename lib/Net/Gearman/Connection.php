@@ -57,6 +57,7 @@ class Connection
         'submit_job' => array(7, array('func', 'uniq', 'arg')),
         'submit_job_high' => array(21, array('func', 'uniq', 'arg')),
         'submit_job_bg' => array(18, array('func', 'uniq', 'arg')),
+        'submit_job_epoch' => array(36, array('func', 'uniq', 'epoch','arg')),
         'submit_job_high_bg' => array(32, array('func', 'uniq', 'arg')),
         'submit_job_low' => array(33, array('func', 'uniq', 'arg')),
         'submit_job_low_bg' => array(34, array('func', 'uniq', 'arg')),
