@@ -150,7 +150,7 @@ class Connection
         $start = microtime(true);
         do {
             $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-            $socket_connected = @socket_connect($socket, $host, $port);
+            $socket_connected = socket_connect($socket, $host, $port);
             if ($socket_connected) {
                 socket_set_nonblock($socket);
                 socket_set_option($socket, SOL_TCP, 1, 1);
@@ -266,7 +266,7 @@ class Connection
         if (self::stringLength($header) == 0) {
             return array();
         }
-        $resp = @unpack('a4magic/Ntype/Nlen', $header);
+        $resp = unpack('a4magic/Ntype/Nlen', $header);
 
         if (!count($resp) == 3) {
             throw new Exception('Received an invalid response');
@@ -365,9 +365,27 @@ class Connection
      */
     static public function isConnected($conn)
     {
-        return (is_null($conn) !== true &&
-                is_resource($conn) === true &&
-                strtolower(get_resource_type($conn)) == 'socket');
+        $type = strtolower(get_resource_type($conn));
+
+        if (is_null($conn) !== true &&
+            is_resource($conn) === true &&
+            ($type == 'stream' || $type == 'socket'))
+        {
+            if($type == 'socket')
+            {
+            	return true;
+            } else
+            {
+                $socket_meta = stream_get_meta_data($conn);
+
+                if(! $socket_meta['eof'] && ! $socket_meta['timed_out'])
+                {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
     }
 
     /**
