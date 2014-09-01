@@ -260,7 +260,7 @@ class Client implements ServerSetting
      * @param integer $epoch Time of job to run at (unix timestamp)
      * @return Set
      */
-    private function createSet($functionName, $workload, $unique = null, $type = Task::JOB_NORMAL, $epoch = 0)
+    public function createSet($functionName, $workload, $unique = null, $type = Task::JOB_NORMAL, $epoch = 0)
     {
         if (null === $unique) {
             $unique = $this->generateUniqueId();
@@ -274,6 +274,26 @@ class Client implements ServerSetting
         return $set;
     }
 
+    /**
+     * Create a single task
+     *
+     * @param string $functionName
+     * @param string $workload
+     * @param string $unique
+     * @param integer $type Type of job to run task as
+     * @param integer $epoch Time of job to run at (unix timestamp)
+     * @return Task
+     */
+    public function newTask($functionName, $workload, $unique = null, $type = Task::JOB_NORMAL, $epoch = 0)
+    {
+        if (null === $unique) {
+            $unique = $this->generateUniqueId();
+        }
+
+        $task = new Task($functionName, $workload, $unique, $type, $epoch);
+        return $task;
+    }
+    
     /**
      * @return string
      */
