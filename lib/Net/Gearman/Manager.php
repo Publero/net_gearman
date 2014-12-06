@@ -40,6 +40,23 @@ namespace Net\Gearman;
 class Manager
 {
     /**
+     * Default  connection timeout
+     * @type int
+     */
+    const CONNECT_TIMEOUT = 5;
+    /**
+     * Last error code
+     * @var int
+     */
+    private $errorCode = 0;
+
+    /**
+     * Last error message
+     * @var string
+     */
+    private $errorMessage = null;
+
+    /**
      * Connection resource
      *
      * @var resource $conn Connection to Gearman server
@@ -68,21 +85,18 @@ class Manager
      * @throws \Net\Gearman\Exception
      * @see \Net\Gearman\Manager::$conn
      */
-    public function __construct($server, $timeout = 5)
+    public function __construct($server, $timeout = self::CONNECT_TIMEOUT)
     {
         if (strpos($server, ':')) {
             list($host, $port) = explode(':', $server);
         } else {
             $host = $server;
-            $port = 4730;
+            $port = GEARMAN_DEFAULT_TCP_PORT;
         }
 
-        $errCode    = 0;
-        $errMsg     = '';
-        $this->conn = @fsockopen($host, $port, $errCode, $errMsg, $timeout);
-        if ($this->conn === false) {
+        if (!$this->conn = @fsockopen($host, $port, $this->errorCode, $this->errorMessage, $timeout)) {
             throw new Exception(
-                'Could not connect to ' . $host . ':' . $port
+                sprintf('[%s]: Could not connect to %s:%s. Server says: %s', $this->errorCode, $host, $port, $this->errorMessage)
             );
         }
     }
