@@ -304,7 +304,11 @@ class Manager
         $data = trim($data);
         if (preg_match('/^ERR/', $data)) {
             list(, $code, $msg) = explode(' ', $data);
-            throw new Exception($msg, urldecode($code));
+
+            $this->errorCode = urlencode($code);
+            $this->errorMessage = $message;
+
+            throw new Exception($this->errorMessage, $this->errorCode);
         }
     }
 
