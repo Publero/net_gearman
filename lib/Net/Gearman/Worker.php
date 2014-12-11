@@ -362,6 +362,7 @@ class Worker implements ServerSetting
             }
         }
 
+        $arg = base64_decode($arg);
         try {
             $this->callStartCallbacks($handle, $name, $arg);
 

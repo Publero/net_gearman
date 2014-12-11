@@ -266,6 +266,8 @@ class Client implements ServerSetting
             $unique = $this->generateUniqueId();
         }
 
+        // the workload string needs to have null-bytes escaped
+        $workload = base64_encode($workload);
         $task = new Task($functionName, $workload, $unique, $type, $epoch);
         $task->type = $type;
         $set = new Set();
