@@ -59,9 +59,7 @@ This library uses [semantic versioning](http://semver.org/).
 License
 -------
 
-This library is under the new BSD license. See the complete license:
-
-    [LICENSE](index.md)
+This library is under the new BSD license. [See the complete license](https://github.com/Publero/net_gearman/blob/master/LICENSE).
 
 About
 -----
