@@ -26,8 +26,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase
         }
 
         $this->assertInternalType('resource', $connection);
-        $this->assertEquals('socket', strtolower(get_resource_type($connection)));
-
+        $this->assertTrue(in_array(strtolower(get_resource_type($connection)), ['socket', 'stream']));
         $this->assertTrue(Connection::isConnected($connection));
 
         Connection::close($connection);

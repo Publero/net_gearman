@@ -365,9 +365,13 @@ class Connection
      */
     static public function isConnected($conn)
     {
+        $validResources = [
+            'socket' => true,
+            'stream' => true
+        ];
         return (is_null($conn) !== true &&
                 is_resource($conn) === true &&
-                strtolower(get_resource_type($conn)) == 'socket');
+                !empty($validResources[strtolower(get_resource_type($conn))]));
     }
 
     /**
